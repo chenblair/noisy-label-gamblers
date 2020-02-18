@@ -7,6 +7,7 @@ from torch.autograd import Variable
 import torchvision.transforms as transforms
 from torchvision import datasets
 from data.mnist import MNIST
+from data.cifar import CIFAR10
 from model import CNN_basic, CNN_small, LSTMClassifier
 from optimizer import LaProp
 import argparse
