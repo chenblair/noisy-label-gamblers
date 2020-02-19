@@ -94,6 +94,8 @@ def test(args, model, device, test_loader, num_classes, text=False):
                 data = batch.text[0]
                 target = batch.label
                 target = torch.autograd.Variable(target).long()
+                if (data.size()[0] != args.batch_size):
+                    continue
             else:
                 data, target, index = batch
 
@@ -209,8 +211,6 @@ def main():
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
-    batch_size = args.batch_size
-
     if args.dataset == 'mnist':
         input_channel = 1
         num_classes = 10
@@ -237,7 +237,7 @@ def main():
             shuffle=True)
         test_loader = torch.utils.data.DataLoader(
             dataset=test_dataset,
-            batch_size=batch_size,
+            batch_size=args.batch_size,
             num_workers=args.num_workers,
             drop_last=True,
             shuffle=False)
@@ -268,7 +268,7 @@ def main():
             shuffle=True)
         test_loader = torch.utils.data.DataLoader(
             dataset=test_dataset,
-            batch_size=batch_size,
+            batch_size=args.batch_size,
             num_workers=args.num_workers,
             drop_last=True,
             shuffle=False)
@@ -292,7 +292,7 @@ def main():
         model = CNN_small(num_classes=num_classes + 1).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     if args.dataset == 'imdb':
-        model = LSTMClassifier(batch_size, num_classes+1, hidden_size, vocab_size, embedding_length, word_embeddings).to(device)
+        model = LSTMClassifier(args.batch_size, num_classes+1, hidden_size, vocab_size, embedding_length, word_embeddings).to(device)
         optimizer = LaProp(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
 
     acc = []
