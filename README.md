@@ -22,11 +22,9 @@ Gamblers + Autoscheduling:
 
 ### IMDB:
 nll: 
-- `python3 main.py --dataset imdb --noise_rate 0.2 --lr 0.001 --batch_size 32 --noise_type symmetric --n_epoch 100 --start_gamblers 10 --lambda_type nll
-`
+- `python3 main.py --dataset imdb --noise_rate 0.2 --lr 0.001 --batch_size 32 --noise_type symmetric --n_epoch 100 --start_gamblers 10 --lambda_type nll`
 Gamblers + Early Stopping:
-- `python3 main.py --dataset imdb --noise_rate 0.2 --lr 0.001 --batch_size 32 --noise_type symmetric --n_epoch 100 --start_gamblers 10 --lambda_type gmblers --eps 1.95 --early_stopping
-`
+- `python3 main.py --dataset imdb --noise_rate 0.2 --lr 0.001 --batch_size 32 --noise_type symmetric --n_epoch 100 --start_gamblers 10 --lambda_type gmblers --eps 1.95 --early_stopping`
 Gamblers + Autoscheduling:
 - `python3 main.py --dataset imdb --noise_rate 0.2 --lr 0.001 --batch_size 32 --noise_type symmetric --n_epoch 100 --start_gamblers 10 --lambda_type euc`
 

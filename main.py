@@ -83,6 +83,7 @@ def train(args,
                 100. * batch_idx / len(train_loader), loss.item()))
     return np.mean(loss_a)
 
+
 def test(args, model, device, test_loader, num_classes, text=False):
     model.eval()
     test_loss = 0
@@ -114,7 +115,8 @@ def test(args, model, device, test_loader, num_classes, text=False):
         '\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
             test_loss, correct, len(test_loader.dataset), acc))
     return acc
-    
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='PyTorch Gambler\'s Loss Runner')
@@ -249,7 +251,8 @@ def main():
         embedding_length = 300
         hidden_size = 256
         print('loading dataset...')
-        TEXT, vocab_size, word_embeddings, train_loader, valid_iter, test_loader = load_data.load_dataset(rate=args.noise_rate, batch_size=args.batch_size)
+        TEXT, vocab_size, word_embeddings, train_loader, valid_iter, test_loader = load_data.load_dataset(
+            rate=args.noise_rate, batch_size=args.batch_size)
 
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -263,7 +266,8 @@ def main():
         model = CNN_small(num_classes=num_classes + 1).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     if args.dataset == 'imdb':
-        model = LSTMClassifier(args.batch_size, num_classes+1, hidden_size, vocab_size, embedding_length, word_embeddings).to(device)
+        model = LSTMClassifier(args.batch_size, num_classes + 1, hidden_size,
+                               vocab_size, embedding_length, word_embeddings).to(device)
         optimizer = LaProp(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
 
     acc = []
@@ -302,7 +306,6 @@ def main():
             'loss': loss,
             'test_acc': acc
         }, args.result_dir + "/" + name + "_model.npy")
-
 
     print(name)
     np.save(args.result_dir + "/" + name + "_acc.npy", acc)
