@@ -50,13 +50,13 @@ def train(args,
             eps = 1000 + num_classes
 
             # set lambda in the gambler's loss
-            if (args.lambda_type == 'exp'):
+            if (args.lambda_type == 'euc'):
                 eps = ((1 - output[:, num_classes])**2 + 1e-10) / (torch.sum(
                     (output[:, :num_classes])**2, (1, -1)))
             elif (args.lambda_type == 'mid'):
                 eps = ((1 - output[:, num_classes]) + 1e-10) / (torch.sum(
                     (output[:, :num_classes])**2, (1, -1)))
-            elif (args.lambda_type == 'euc'):
+            elif (args.lambda_type == 'exp'):
                 columns = output[:, :num_classes] + 1E-10
                 eps = torch.exp(
                     -1 * (torch.sum(torch.log(columns) * columns,
@@ -106,10 +106,6 @@ def test(args, model, device, test_loader, num_classes, text=False):
             pred = output[:, :num_classes].argmax(
                 dim=1,
                 keepdim=True)  # get the index of the max log-probability
-
-            # if text:
-            #     correct += (torch.max(output[:, :2], 1)[1].view(target.size()).data == target.data).sum().item()
-            # else:
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
@@ -118,32 +114,7 @@ def test(args, model, device, test_loader, num_classes, text=False):
         '\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
             test_loss, correct, len(test_loader.dataset), acc))
     return acc
-
-# def eval_model(model, val_iter):
-#     total_epoch_loss = 0
-#     total_epoch_acc = 0
-#     model.eval()
-#     with torch.no_grad():
-#         for idx, batch in enumerate(val_iter):
-#             text = batch.text[0]
-#             if (text.size()[0] is not batch_size):
-#                 continue
-#             target = batch.label
-#             target = torch.autograd.Variable(target).long()
-#             if torch.cuda.is_available():
-#                 text = text.cuda()
-#                 target = target.cuda()
-#             prediction = model(text)
-
-#             loss = F.nll_loss(prediction, target)
-
-#             num_corrects = (torch.max(prediction[:, :2], 1)[1].view(target.size()).data == target.data).sum()
-#             acc = 100.0 * num_corrects/len(batch)
-#             total_epoch_loss += loss.item()
-#             total_epoch_acc += acc.item()
-
-#     return total_epoch_loss/len(val_iter), total_epoch_acc/len(val_iter)
-
+    
 def main():
     parser = argparse.ArgumentParser(
         description='PyTorch Gambler\'s Loss Runner')
@@ -202,7 +173,7 @@ def main():
         help='enables early stopping criterion for only symmetric datasets')
     parser.add_argument('--eps', type=float, help='set lambda for lambda type \'gmblers\' only', default=1000.0)
     parser.add_argument(
-        '--lambda_type', type=str, help='[nll, exp, mid, euc, gmblers]', default="exp")
+        '--lambda_type', type=str, help='[nll, euc, mid, exp, gmblers]', default="euc")
     parser.add_argument(
         '--start_gamblers', type=int, help='number of epochs before starting gamblers', default=0)
 
