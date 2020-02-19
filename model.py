@@ -4,10 +4,11 @@ import torch.nn as nn
 import torch.nn.init as init 
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.autograd import Variable
 
 class CNN_basic(nn.Module):
     def __init__(self, num_classes=10):
-        super(Net, self).__init__()
+        super(CNN_basic, self).__init__()
         self.accuracy = []
         self.conv1 = nn.Conv2d(1, 20, 5, 1)
         self.conv2 = nn.Conv2d(20, 50, 5, 1)

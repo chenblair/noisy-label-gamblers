@@ -15,7 +15,6 @@ import sys
 import numpy as np
 import datetime
 import shutil
-from tqdm import tqdm
 import load_data
 
 
@@ -31,12 +30,12 @@ def train(args,
     model.train()
     loss_a = []
 
-    for batch_idx, batch in tqdm(enumerate(train_loader)):
+    for batch_idx, batch in enumerate(train_loader):
         if text:
             data = batch.text[0]
             target = batch.label
             target = torch.autograd.Variable(target).long()
-            if (data.size()[0] is not args.batch_size):
+            if (data.size()[0] != args.batch_size):
                 continue
         else:
             data, target, index = batch
@@ -48,7 +47,7 @@ def train(args,
         with torch.no_grad():
             # default to nll
             # if eps > num_classes, model learning is equivalent to nll
-            eps = 1 + num_classes
+            eps = 1000 + num_classes
 
             # set lambda in the gambler's loss
             if (args.lambda_type == 'exp'):
@@ -63,9 +62,11 @@ def train(args,
                     -1 * (torch.sum(torch.log(columns) * columns,
                                     (1, -1)) + 1E-10) / torch.sum(
                                         columns, (1, -1)))
+            elif (args.lambda_type == 'gmblers'):
+                eps = args.eps
 
             if (not use_gamblers):
-                eps = 1 + num_classes
+                eps = 1000 + num_classes
 
         # compute gambler's loss
         output = (output + (output[:, num_classes] / eps).unsqueeze(1) +
@@ -80,9 +81,9 @@ def train(args,
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\t'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.item()))
-    return np.mean(loss_a), torch.mean(output[:, num_classes])
+    return np.mean(loss_a)
 
-def test(args, model, device, test_loader, num_classes, text):
+def test(args, model, device, test_loader, num_classes, text=False):
     model.eval()
     test_loss = 0
     correct = 0
@@ -93,10 +94,9 @@ def test(args, model, device, test_loader, num_classes, text):
                 data = batch.text[0]
                 target = batch.label
                 target = torch.autograd.Variable(target).long()
-                if (data.size()[0] is not args.batch_size):
-                    continue
             else:
                 data, target, index = batch
+
             data, target = data.to(device), target.to(device)
             output = model(data)
             test_loss += F.nll_loss(
@@ -104,6 +104,10 @@ def test(args, model, device, test_loader, num_classes, text):
             pred = output[:, :num_classes].argmax(
                 dim=1,
                 keepdim=True)  # get the index of the max log-probability
+
+            # if text:
+            #     correct += (torch.max(output[:, :2], 1)[1].view(target.size()).data == target.data).sum().item()
+            # else:
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
@@ -172,9 +176,9 @@ def main():
     parser.add_argument(
         '--batch_size',
         type=int,
-        default=1000,
+        default=128,
         metavar='N',
-        help='input batch size for training (default: 256)')
+        help='input batch size for training (default: 128)')
     parser.add_argument(
         '--log-interval',
         type=int,
@@ -194,8 +198,9 @@ def main():
         action='store_true',
         default=False,
         help='enables early stopping criterion for only symmetric datasets')
+    parser.add_argument('--eps', type=float, help='set lambda for lambda type \'gmblers\' only', default=1000.0)
     parser.add_argument(
-        '--lambda_type', type=str, help='[nll, exp, mid, euc]', default="exp")
+        '--lambda_type', type=str, help='[nll, exp, mid, euc, gmblers]', default="exp")
     parser.add_argument(
         '--start_gamblers', type=int, help='number of epochs before starting gamblers', default=0)
 
@@ -273,7 +278,7 @@ def main():
         embedding_length = 300
         hidden_size = 256
         print('loading dataset...')
-        TEXT, vocab_size, word_embeddings, train_iter, valid_iter, test_iter = load_data.load_dataset(rate=args.noise_rate, batch_size=batch_size)
+        TEXT, vocab_size, word_embeddings, train_loader, valid_iter, test_loader = load_data.load_dataset(rate=args.noise_rate, batch_size=args.batch_size)
 
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -301,8 +306,11 @@ def main():
     name = str(args.dataset) + "_" + str(args.noise_type) + "_" + str(
         args.noise_rate) + "_" + str(args.eps) + "_" + str(args.seed)
 
+    if not os.path.exists(args.result_dir):
+        os.system('mkdir -p %s' % args.result_dir)
+
     for epoch in range(1, args.n_epoch + 1):
-        l1, out10 = train(
+        l1 = train(
             args,
             model,
             device,
@@ -313,10 +321,8 @@ def main():
             use_gamblers=(epoch >= args.start_gamblers),
             text=(args.dataset == 'imdb'))
         loss.append(l1)
-        out.append(out10)
         acc.append(test(args, model, device, test_loader, num_classes, text=(args.dataset == 'imdb')))
-        print(l1, criteria)
-        if l1 < criteria and epoch >= args.start_gamblers:
+        if l1 < criteria and epoch >= args.start_gamblers and args.early_stopping:
             print('epoch: {}, loss fulfilled early stopping criteria: {} < {}'.format(epoch, l1, criteria))
             break
         torch.save({
@@ -324,11 +330,8 @@ def main():
             'optimizer_state_dict': optimizer.state_dict(),
             'loss': loss,
             'test_acc': acc
-        }, "early_stopping/" + name + "_model.npy")
+        }, args.result_dir + "/" + name + "_model.npy")
 
-    save_dir = "early_stopping"
-    if not os.path.exists(args.result_dir):
-        os.system('mkdir -p %s' % args.result_dir)
 
     print(name)
     np.save(args.result_dir + "/" + name + "_acc.npy", acc)
