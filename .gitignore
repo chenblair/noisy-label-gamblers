@@ -138,7 +138,9 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-data/
+processed/
+raw/
+cifar-10*
 results/
 .data/
 .vector_cache/
