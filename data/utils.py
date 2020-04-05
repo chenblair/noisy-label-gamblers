@@ -128,6 +128,7 @@ def noisify_pairflip(y_train, noise, random_state=None, nb_classes=10):
     """
     P = np.eye(nb_classes)
     n = noise
+    actual_noise = 0.0
 
     if n > 0.0:
         # 0 -> 1
@@ -153,7 +154,8 @@ def noisify_multiclass_symmetric(y_train, noise, random_state=None, nb_classes=1
     P = np.ones((nb_classes, nb_classes))
     n = noise
     P = (n / (nb_classes - 1)) * P
-
+    actual_noise = 0.0
+    
     if n > 0.0:
         # 0 -> 1
         P[0, 0] = 1. - n
