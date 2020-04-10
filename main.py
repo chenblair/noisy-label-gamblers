@@ -16,7 +16,7 @@ import numpy as np
 import datetime
 import shutil
 import load_data
-
+import json
 
 def train(args,
           model,
@@ -102,8 +102,8 @@ def test(args, model, device, test_loader, num_classes, text=False):
 
             data, target = data.to(device), target.to(device)
             output = model(data)
-            test_loss += F.nll_loss(
-                output, target, reduction='sum').item()  # sum up batch loss
+            loss = F.cross_entropy(output, target, reduction='sum')
+            test_loss += loss.item()  # sum up batch loss
             pred = output[:, :num_classes].argmax(
                 dim=1,
                 keepdim=True)  # get the index of the max log-probability
@@ -114,7 +114,7 @@ def test(args, model, device, test_loader, num_classes, text=False):
     print(
         '\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
             test_loss, correct, len(test_loader.dataset), acc))
-    return acc
+    return acc, test_loss
 
 
 def main():
@@ -270,22 +270,23 @@ def main():
                                vocab_size, embedding_length, word_embeddings).to(device)
         optimizer = LaProp(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
 
-    acc = []
-    loss = []
+    test_accs = []
+    train_losses = []
+    test_losses = []
     out = []
 
     eee = 1 - args.noise_rate
     criteria = (-1) * (eee * np.log(eee) + (1 - eee) * np.log(
         (1 - eee) / (args.eps - 1)))
 
-    name = str(args.dataset) + "_" + str(args.noise_type) + "_" + str(
-        args.noise_rate) + "_" + str(args.eps) + "_" + str(args.seed)
+    name = "{}_{}_{:.2f}_{}_{}".format(args.dataset, args.noise_type, args.noise_rate, args.eps, args.seed)
 
     if not os.path.exists(args.result_dir):
         os.system('mkdir -p %s' % args.result_dir)
 
     for epoch in range(1, args.n_epoch + 1):
-        l1 = train(
+        print(name)
+        train_loss = train(
             args,
             model,
             device,
@@ -295,21 +296,25 @@ def main():
             num_classes=num_classes,
             use_gamblers=(epoch >= args.start_gamblers),
             text=(args.dataset == 'imdb'))
-        loss.append(l1)
-        acc.append(test(args, model, device, test_loader, num_classes, text=(args.dataset == 'imdb')))
-        if l1 < criteria and epoch >= args.start_gamblers and args.early_stopping:
-            print('epoch: {}, loss fulfilled early stopping criteria: {} < {}'.format(epoch, l1, criteria))
-            break
-        torch.save({
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'loss': loss,
-            'test_acc': acc
-        }, args.result_dir + "/" + name + "_model.npy")
+        train_losses.append(train_loss)
+        test_acc, test_loss = test(args, model, device, test_loader, num_classes, text=(args.dataset == 'imdb'))
+        test_accs.append(test_acc)
+        test_losses.append(test_loss)
+        
+        # torch.save({
+        #     'model_state_dict': model.state_dict(),
+        #     'optimizer_state_dict': optimizer.state_dict(),
+        #     'loss': loss,
+        #     'test_acc': acc
+        # }, args.result_dir + "/" + name + "_model.npy")
 
-    print(name)
-    np.save(args.result_dir + "/" + name + "_acc.npy", acc)
-    np.save(args.result_dir + "/" + name + "_loss.npy", loss)
+    save_data = {
+        "train_loss" : train_losses,
+        "test_loss" : test_losses,
+        "test_acc" : test_accs
+    }
+    save_file = args.result_dir + "/" + name + ".json"
+    json.dump(save_data, open(save_file, 'w'))
 
 
 if __name__ == '__main__':
