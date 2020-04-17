@@ -28,8 +28,7 @@ def train(args,
           epoch,
           num_classes=10,
           use_gamblers=True,
-          text=False,
-          save_info=''):
+          text=False):
     model.train()
     loss_a = []
 
@@ -52,7 +51,6 @@ def train(args,
             # if eps > num_classes, model learning is equivalent to nll
             eps = 1000 + num_classes
 
-            # python3 main.py --dataset animal-10n --lr 0.0001 --batch_size 128 --n_epoch 50 --lambda_type nll --seed 10 --gpu 1 --load_model
             # set lambda in the gambler's loss
             if (args.lambda_type == 'euc'):
                 eps = ((1 - output[:, num_classes])**2 + 1e-10) / (torch.sum(
@@ -90,9 +88,6 @@ def train(args,
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\t'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.item()))
-    if (len(save_info) > 0):
-        print("saving info in {}".format(save_info))
-        json.dump(, open(save_info, 'w'))
     return np.mean(loss_a)
 
 
