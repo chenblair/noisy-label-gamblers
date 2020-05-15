@@ -9,6 +9,7 @@ import torchvision.models as models
 from torchvision import datasets
 from data.mnist import MNIST
 from data.cifar import CIFAR10
+from data.clothing1m import clothing_dataloader
 from model import CNN_basic, CNN_small, LSTMClassifier
 from optimizer import LaProp
 import argparse
@@ -28,10 +29,16 @@ def train(args,
           epoch,
           num_classes=10,
           use_gamblers=True,
-          text=False):
+          text=False,
+          save_info='',
+          noise_or_not=None):
     model.train()
     loss_a = []
-
+    if (len(save_info) > 0):
+        no_noise_reject = []
+        noise_reject = []
+        no_noise_loss = []
+        noise_loss = []
     for batch_idx, batch in enumerate(train_loader):
         if text:
             data = batch.text[0]
@@ -66,7 +73,15 @@ def train(args,
                                         columns, (1, -1)))
             elif (args.lambda_type == 'gmblers'):
                 eps = args.eps
-
+        
+        if (len(save_info) > 0): 
+            index = batch[2]
+            for i in range(len(index)):
+                if (noise_or_not[index[i]]):
+                    no_noise_reject.append(output[:,num_classes][i].item())
+                else:
+                    noise_reject.append(output[:,num_classes][i].item())
+                    
         if (args.lambda_type == 'lq'):
             q = 0.7
             loss = -1 * F.nll_loss(output, target, reduction='none')
@@ -76,10 +91,19 @@ def train(args,
         elif (use_gamblers and args.lambda_type != 'nll'):
             output = (output + (output[:, num_classes] / eps).unsqueeze(1) +
                   1E-10).log()
+            fakeout_loss = F.nll_loss(output, target, reduction='none')
             loss = F.nll_loss(output, target)
         else:
             output = output.log()
             loss = F.nll_loss(output, target)
+        
+        if (len(save_info) > 0): 
+            index = batch[2]
+            for i in range(len(index)):
+                if (noise_or_not[index[i]]):
+                    no_noise_loss.append(fakeout_loss[i].item())
+                else:
+                    noise_loss.append(fakeout_loss[i].item())
         loss_a.append(loss.item())
         loss.backward()
         optimizer.step()
@@ -88,6 +112,15 @@ def train(args,
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\t'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.item()))
+    if (len(save_info) > 0):
+        print("saving info in {}".format(save_info))
+        save_data = {
+            "train_loss_clean": no_noise_loss,
+            "train_loss_corrupt": noise_loss,
+            "rejection_clean": no_noise_reject,
+            "rejection_corrupt":  noise_reject
+        }
+        json.dump(save_data, open(save_info, 'w'))
     return np.mean(loss_a)
 
 
@@ -291,6 +324,12 @@ def main():
             drop_last=True,
             shuffle=False)
     
+    if args.dataset == 'clothing1m':
+        num_classes = 14
+        print('loading dataset...')
+        loader = clothing_dataloader(batch_size=args.batch_size,num_workers=5,shuffle=True)
+        train_loader,val_loader,test_loader = loader.run()
+    
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda:{}".format(args.gpu) if use_cuda else "cpu")
     print("using {}".format(device))
@@ -313,6 +352,11 @@ def main():
         if (args.use_scheduler):
             change_lr = lambda epoch: pow(0.2, int(epoch >= 50) + int(epoch >= 75))
             scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=change_lr)
+    if args.dataset == 'clothing1m':
+        model = models.resnet50(pretrained=True)
+        model.fc = nn.Linear(2048,num_classes + 1)
+        model = model.to(device)
+        optimizer = torch.optim.SGD(model.parameters(), momentum=0.9, lr=args.lr, weight_decay=1e-4)
 
     test_accs = []
     train_losses = []
@@ -363,6 +407,18 @@ def main():
             break
         
         if args.early_stopping and epoch >= args.start_gamblers and train_loss < criteria :
+            train_loss = train(
+                args,
+                model,
+                device,
+                train_loader,
+                optimizer,
+                epoch,
+                num_classes=num_classes,
+                use_gamblers=(epoch > args.start_gamblers),
+                text=(args.dataset == 'imdb'),
+                save_info="{}/{}_noise.json".format(args.result_dir, name),
+                noise_or_not=train_dataset.noise_or_not)
             print('epoch: {}, loss fulfilled early stopping criteria: {} < {}'.format(epoch, train_loss, criteria))
             break
         
@@ -380,6 +436,7 @@ def main():
         torch.save(model_data, "{}/{}.npy".format(args.result_dir, name))
 
     save_data = {
+        "command": " ".join(sys.argv),
         "train_loss" : train_losses,
         "test_loss" : test_losses,
         "test_acc" : test_accs
